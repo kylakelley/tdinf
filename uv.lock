@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11, <3.13"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -517,18 +517,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ezdag"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "htcondor" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8e/2d/2980219759dcf8660a9ab0dc848a1ed62127cb79b757ea7ccfaed95cb965/ezdag-0.4.0.tar.gz", hash = "sha256:569a6981557950a76fb54e58d41d759b5ac13ac202bfbd5a5a318cd7b497fc6b", size = 88663, upload-time = "2024-11-19T00:33:48.752Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/5c/68/d2d8b68b13044a62cae15721a34cc6d001ace7e7c475629246ec5b536041/ezdag-0.4.0-py3-none-any.whl", hash = "sha256:3580e4969c81abfb3450c48d6b64357c2773a7e7384f36cbec55aafcb3f31559", size = 39441, upload-time = "2024-11-19T00:33:50.694Z" },
-]
-
-[[package]]
 name = "fastjsonschema"
 version = "2.21.1"
 source = { registry = "https://pypi.org/simple" }
@@ -671,17 +659,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3f/19/c8bfe8543bfdd7ccfafd46d8cfd96fce53d6c33e9c7921f375530ee1d39a/h5py-3.14.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:554ef0ced3571366d4d383427c00c966c360e178b5fb5ee5bb31a435c424db0c", size = 4708455, upload-time = "2025-06-06T14:05:11.528Z" },
     { url = "https://files.pythonhosted.org/packages/86/f9/f00de11c82c88bfc1ef22633557bfba9e271e0cb3189ad704183fc4a2644/h5py-3.14.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0cbd41f4e3761f150aa5b662df991868ca533872c95467216f2bec5fcad84882", size = 4929422, upload-time = "2025-06-06T14:05:18.399Z" },
     { url = "https://files.pythonhosted.org/packages/7a/6d/6426d5d456f593c94b96fa942a9b3988ce4d65ebaf57d7273e452a7222e8/h5py-3.14.0-cp312-cp312-win_amd64.whl", hash = "sha256:bf4897d67e613ecf5bdfbdab39a1158a64df105827da70ea1d90243d796d367f", size = 2862845, upload-time = "2025-06-06T14:05:23.699Z" },
-]
-
-[[package]]
-name = "htcondor"
-version = "24.8.1"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/ca/bfc454f8c5a50860f42c2845ad9a8e36781f6ad097259df5ebf23e2ec6a7/htcondor-24.8.1-cp311-cp311-manylinux_2_28_aarch64.whl", hash = "sha256:21649c08a320cb48e50773fe1559136e4530e593ca335ee16be80d013e86bb2b", size = 60326705, upload-time = "2025-06-16T15:38:57.995Z" },
-    { url = "https://files.pythonhosted.org/packages/f3/4e/d1fe265f6bff15494c6883179e8cd0f23cee5f2ccd156287b7b53d82218e/htcondor-24.8.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b38acf6efaf6d5e6e4ea2e9016a8269501e2f03d21055906ee9b67331857ca16", size = 61887150, upload-time = "2025-06-16T15:39:01.591Z" },
-    { url = "https://files.pythonhosted.org/packages/57/b0/7c47d9aaa4dd2f58f8de66bb53a4d6af732d5d5fee52d8e133c12660556d/htcondor-24.8.1-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:8296f186e49558510816ac659ef0a9bfb6cdf6b5ff172845aa7ef2be9d332497", size = 60419458, upload-time = "2025-06-16T15:39:04.979Z" },
-    { url = "https://files.pythonhosted.org/packages/0d/0c/11d8cbb1bfb468e51e043acdd0bdfc287e33bd9ce25ffa5d7df0d0841b89/htcondor-24.8.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:bb25a3942ec00c097777d5c61df03281d493745deed7aa73f72674949334595d", size = 62001916, upload-time = "2025-06-16T15:39:08.381Z" },
 ]
 
 [[package]]
@@ -2250,7 +2227,6 @@ source = { editable = "." }
 dependencies = [
     { name = "corner" },
     { name = "emcee" },
-    { name = "ezdag" },
     { name = "gwpy" },
     { name = "h5ify" },
     { name = "h5py" },
@@ -2274,7 +2250,6 @@ dev = [
 requires-dist = [
     { name = "corner", specifier = ">=2.2.3" },
     { name = "emcee" },
-    { name = "ezdag", specifier = ">=0.4.0" },
     { name = "gwpy", specifier = ">=3.0.12" },
     { name = "h5ify" },
     { name = "h5py", specifier = ">=3.14.0" },

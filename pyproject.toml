@@ -9,7 +9,6 @@ dependencies = [
     "pip",
     "corner>=2.2.3",
     "emcee",
-    "ezdag>=0.4.0",
     "gwpy>=3.0.12",
     "h5py>=3.14.0",
     "imageio>=2.37.0",
