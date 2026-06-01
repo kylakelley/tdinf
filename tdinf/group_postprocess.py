@@ -91,8 +91,11 @@ def load_run_settings_from_directory(directory, filename_dict=None, load_all_lm=
             try:
                 # if run with condor:
                 if os.path.exists(os.path.join(directory, 'command_line.sh')): 
-                    commandline_file = os.path.join(directory, 'command_line.sh') 
-                # if run with slurm:
+                    commandline_file = os.path.join(directory, 'command_line.sh')
+                # if run with slurm (per-run task files):
+                elif os.path.exists(os.path.join(directory, f'tasks_run_{filename_dict[key]}.txt')):
+                    commandline_file = os.path.join(directory, f'tasks_run_{filename_dict[key]}.txt')
+                # fallback: legacy single task file
                 else: 
                     commandline_file = os.path.join(directory, 'tasks_run.txt') 
                     
