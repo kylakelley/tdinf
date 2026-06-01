@@ -28,6 +28,10 @@ def get_parser():
     p.add_argument("--constraints", help="SLURM constraints")
     p.add_argument("--time", help="SLURM time directive")
     p.add_argument("--mem", type=str, default=None, help="Memory per job (e.g. '250G')")
+    p.add_argument("--disbatch", action=argparse.BooleanOptionalAction, default=True,
+                   help="Use disBatch to launch tasks (default: True). With --no-disbatch, "
+                        "each task file is run directly via `bash` inside a plain sbatch job. "
+                        "Requires --split-jobs.")
     return p
 
 def copy_file_to_directory_and_return_new_name(file, target_directory, relative_path=None):
@@ -47,6 +51,12 @@ def main(args=None):
     parser = get_parser()
     args = parser.parse_args(args)
     logging.basicConfig(level=logging.INFO if args.submit else logging.WARNING)
+
+    # --no-disbatch only supports the split-jobs layout (one task per file),
+    # since without disBatch we have no parallel-task launcher inside a single
+    # allocation. Fail loudly rather than silently degrade.
+    if not args.disbatch and not args.split_jobs:
+        parser.error("--no-disbatch requires --split-jobs (one task per file).")
 
     # Load config
     config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
@@ -209,6 +219,15 @@ def main(args=None):
         if args.mem:
             sb += f" --mem={args.mem}"
 
+        # Tail of each sbatch line: either disBatch driving the task file, or a
+        # plain `bash <taskfile>` wrapped in sbatch's --wrap. The explicit
+        # --export=ALL,LAL_DATA_PATH=... ensures LAL_DATA_PATH reaches the job
+        # on clusters whose SLURM_EXPORT_ENV default would otherwise strip it.
+        def launch(taskfile):
+            if args.disbatch:
+                return f"disBatch {taskfile}"
+            return f'--export=ALL,LAL_DATA_PATH=$LAL_DATA_PATH --wrap="bash {taskfile}"'
+
         if args.split_jobs:
             # Warn if --ntasks was passed, since it has no effect in split-jobs mode
             if args.ntasks is not None:
@@ -218,20 +237,20 @@ def main(args=None):
             sf.write("run_ids=()\n")
             for run_lbl in run_labels:
                 tasks_run = os.path.join(outdir, f"tasks_run_{run_lbl}.txt")
-                sf.write(f'run_ids+=($(get_id "$({sb} -p {args.partition} -n 1 -c {NCPU} --job-name {run_lbl} disBatch {tasks_run})"))\n')
+                sf.write(f'run_ids+=($(get_id "$({sb} -p {args.partition} -n 1 -c {NCPU} --job-name {run_lbl} {launch(tasks_run)})"))\n')
             # Stage 2 (optional): waveform job depends on all run jobs completing.
             # Build the dependency string explicitly to avoid relying on IFS subshell scoping.
             if "waveform_h5s" in executables:
                 sf.write('\n# Build afterok dependency string from all run job IDs\n')
                 sf.write('dep="afterok"\n')
                 sf.write('for id in "${run_ids[@]}"; do dep="$dep:$id"; done\n')
-                sf.write(f'waveid=$(get_id "$({sb} --dependency=$dep -p {args.partition} -n 1 -c {NCPU} --job-name waveforms disBatch {tasks_wave})")\n')
+                sf.write(f'waveid=$(get_id "$({sb} --dependency=$dep -p {args.partition} -n 1 -c {NCPU} --job-name waveforms {launch(tasks_wave)})")\n')
         else:
             ntasks = args.ntasks if args.ntasks is not None else 100
-            sf.write(f'runid=$(get_id "$({sb} -p {args.partition} -n {ntasks} -c {NCPU} disBatch {tasks_run_combined})")\n')
+            sf.write(f'runid=$(get_id "$({sb} -p {args.partition} -n {ntasks} -c {NCPU} {launch(tasks_run_combined)})")\n')
             # Stage 2 (optional): waveform job depends on combined job
             if "waveform_h5s" in executables:
-                sf.write(f'waveid=$(get_id "$({sb} --dependency=afterok:$runid -p {args.partition} -n 1 -c {NCPU} disBatch {tasks_wave})")\n')
+                sf.write(f'waveid=$(get_id "$({sb} --dependency=afterok:$runid -p {args.partition} -n 1 -c {NCPU} {launch(tasks_wave)})")\n')
 
         sf.write("\ncd -\n")
 
