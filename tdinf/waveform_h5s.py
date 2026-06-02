@@ -190,12 +190,15 @@ def main():
     filename_dict = group_postprocess.generate_filename_dict(directory)
     full_parser = run_sampler.create_run_sampler_arg_parser()
 
-    # load in the commandline file:
+    # load in the commandline file (always sourced from the `full` run):
     if os.path.exists(os.path.join(directory, 'command_line.sh')):
         # if run with condor
-        commandline_file = os.path.join(directory, 'command_line.sh') 
-    else: 
-        # if run with slurm 
+        commandline_file = os.path.join(directory, 'command_line.sh')
+    elif os.path.exists(os.path.join(directory, f"tasks_run_{filename_dict['full']}.txt")):
+        # if run with slurm in --split-jobs mode (per-run task files)
+        commandline_file = os.path.join(directory, f"tasks_run_{filename_dict['full']}.txt")
+    else:
+        # if run with slurm (legacy single combined task file)
         commandline_file = os.path.join(directory, 'tasks_run.txt')
 
     # parse commandline settings

@@ -22,10 +22,16 @@ def get_parser():
     p.add_argument("--modes", nargs='+', type=str, default=("full","pre","post"), help="Run full, pre, and/or post?")
     p.add_argument("--submit", action="store_true", help="Submit the workflow to Slurm")
     p.add_argument("--overwrite", action="store_true", help="Overwrite existing directory")
-    p.add_argument("--ntasks", type=int, default=100, help="Maximum number of tasks to request through SLURM")
+    p.add_argument("--ntasks", type=int, default=None, help="Maximum number of tasks to request through SLURM (used in combined mode only, default: 100)")
+    p.add_argument("--split-jobs", action="store_true", dest="split_jobs", help="Submit each run as a separate independent Slurm job (default: combined into one job)")
     p.add_argument("--partition", type=str, default='cca', help="Partition to run")
     p.add_argument("--constraints", help="SLURM constraints")
     p.add_argument("--time", help="SLURM time directive")
+    p.add_argument("--mem", type=str, default=None, help="Memory per job (e.g. '250G')")
+    p.add_argument("--disbatch", action=argparse.BooleanOptionalAction, default=True,
+                   help="Use disBatch to launch tasks (default: True). With --no-disbatch, "
+                        "each task file is run directly via `bash` inside a plain sbatch job. "
+                        "Requires --split-jobs.")
     return p
 
 def copy_file_to_directory_and_return_new_name(file, target_directory, relative_path=None):
@@ -45,6 +51,12 @@ def main(args=None):
     parser = get_parser()
     args = parser.parse_args(args)
     logging.basicConfig(level=logging.INFO if args.submit else logging.WARNING)
+
+    # --no-disbatch only supports the split-jobs layout (one task per file),
+    # since without disBatch we have no parallel-task launcher inside a single
+    # allocation. Fail loudly rather than silently degrade.
+    if not args.disbatch and not args.split_jobs:
+        parser.error("--no-disbatch requires --split-jobs (one task per file).")
 
     # Load config
     config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
@@ -108,64 +120,83 @@ def main(args=None):
         ) for ifo, fpath in ast.literal_eval(psd_dict_str).items()}
     run_options += ''.join([f"--psd {k}:{v} " for k, v in psd_dict.items()])
 
-    # Prepare tasks files for each pipeline stage
-    tasks_run = os.path.join(outdir, "tasks_run.txt")
-    tasks_wave = os.path.join(outdir, "tasks_waveforms.txt")
-    with open(tasks_run, "w") as tf_run, open(tasks_wave, "w") as tf_wave:  
+    # Cutoff times list and /or cutoff cycles list
+    cycle_list = args.cycle_list or []
+    times_list = args.times_list or []
 
-        # Cutoff times list and /or cutoff cycles list
-        cycle_list = args.cycle_list or []
-        times_list = args.times_list or []
-
-        def get_modes(val):
-            if 'full' in args.modes and val==0: 
-                return args.modes
-            else: 
-                return [k for k in args.modes if k!="full"]
-                
-        def run_label(mode, cut, unit):
-            return f"{mode}_{cut}{unit}"
+    def get_modes(val):
+        if 'full' in args.modes and val==0: 
+            return args.modes
+        else: 
+            return [k for k in args.modes if k!="full"]
             
-        # Build tasks for cycles
-        for cut in cycle_list:
-            modes = get_modes(cut)
-            for mode in modes:
-                run_lbl = run_label(mode, cut, "cycles")
-                # make directory for run output
-                os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
-                # run_sampler command
-                run_cmd = [executables["run_sampler"], "--output-h5", f"{run_lbl}/{run_lbl}.h5", "--mode", mode, 
-                           "--Tcut-cycles", str(cut), run_options, f"&>> {run_lbl}/{run_lbl}.log"]
-                tf_run.write(" ".join(run_cmd) + "\n")
-                # make_waveforms
-                if "waveform_h5s" in executables:
-                    wf_label = mode if mode=='full' else f'{mode}_{cut}'
-                    wf_cmd = [executables["waveform_h5s"], "--directory . --run_key", wf_label, wf_options, 
-                             f"&>> {run_lbl}/waveforms.log"]
-                    tf_wave.write(" ".join(wf_cmd) + "\n")            
+    def run_label(mode, cut, unit):
+        return f"{mode}_{cut}{unit}"
 
-        # Build tasks for times
-        for cut in times_list:
-            modes = get_modes(cut)
-            for mode in modes:
-                run_lbl = run_label(mode, cut, "seconds")
-                # make directory for run output
-                os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
-                run_cmd = [executables["run_sampler"], "--output-h5", f"{run_lbl}/{run_lbl}.h5", "--mode", mode, 
-                           "--Tcut-seconds", str(cut), run_options, f"&>> {run_lbl}/{run_lbl}.log"]
-                tf_run.write(" ".join(run_cmd) + "\n")
-                # make_waveforms
-                if "waveform_h5s" in executables:
-                    wf_label = mode if mode=='full' else f'{mode}_{cut}'
-                    wf_cmd = [executables["waveform_h5s"], "--directory . --run_key", wf_label, wf_options,
-                             f"&>> {run_lbl}/waveforms.log"]
-                    tf_wave.write(" ".join(wf_cmd) + "\n")
+    # Collect run labels and build task files.
+    run_labels = []
+    tasks_run_combined = os.path.join(outdir, "tasks_run.txt")
+    tasks_wave = os.path.join(outdir, "tasks_waveforms.txt")
+
+    def build_run_cmd(run_lbl, mode, cut_flag, cut):
+        return [executables["run_sampler"], "--output-h5", f"{run_lbl}/{run_lbl}.h5", "--mode", mode,
+                cut_flag, str(cut), run_options, f"&>> {run_lbl}/{run_lbl}.log"]
+
+    def build_wf_cmd(run_lbl, mode, cut):
+        wf_label = mode if mode == 'full' else f'{mode}_{cut}'
+        return [executables["waveform_h5s"], "--directory . --run_key", wf_label, wf_options,
+                f"&>> {run_lbl}/waveforms.log"]
+
+    with open(tasks_wave, "w") as tf_wave:
+
+        if args.split_jobs:
+            # Write one task file per run
+            for cut in cycle_list:
+                for mode in get_modes(cut):
+                    run_lbl = run_label(mode, cut, "cycles")
+                    run_labels.append(run_lbl)
+                    os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
+                    with open(os.path.join(outdir, f"tasks_run_{run_lbl}.txt"), "w") as tf_run:
+                        tf_run.write(" ".join(build_run_cmd(run_lbl, mode, "--Tcut-cycles", cut)) + "\n")
+                    if "waveform_h5s" in executables:
+                        tf_wave.write(" ".join(build_wf_cmd(run_lbl, mode, cut)) + "\n")
+
+            for cut in times_list:
+                for mode in get_modes(cut):
+                    run_lbl = run_label(mode, cut, "seconds")
+                    run_labels.append(run_lbl)
+                    os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
+                    with open(os.path.join(outdir, f"tasks_run_{run_lbl}.txt"), "w") as tf_run:
+                        tf_run.write(" ".join(build_run_cmd(run_lbl, mode, "--Tcut-seconds", cut)) + "\n")
+                    if "waveform_h5s" in executables:
+                        tf_wave.write(" ".join(build_wf_cmd(run_lbl, mode, cut)) + "\n")
+
+        else:
+            # Write a single combined task file
+            with open(tasks_run_combined, "w") as tf_combined:
+                for cut in cycle_list:
+                    for mode in get_modes(cut):
+                        run_lbl = run_label(mode, cut, "cycles")
+                        run_labels.append(run_lbl)
+                        os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
+                        tf_combined.write(" ".join(build_run_cmd(run_lbl, mode, "--Tcut-cycles", cut)) + "\n")
+                        if "waveform_h5s" in executables:
+                            tf_wave.write(" ".join(build_wf_cmd(run_lbl, mode, cut)) + "\n")
+
+                for cut in times_list:
+                    for mode in get_modes(cut):
+                        run_lbl = run_label(mode, cut, "seconds")
+                        run_labels.append(run_lbl)
+                        os.makedirs(os.path.join(outdir, run_lbl), exist_ok=True)
+                        tf_combined.write(" ".join(build_run_cmd(run_lbl, mode, "--Tcut-seconds", cut)) + "\n")
+                        if "waveform_h5s" in executables:
+                            tf_wave.write(" ".join(build_wf_cmd(run_lbl, mode, cut)) + "\n")
 
     # delete the waveform generation file if not needed
     if "waveform_h5s" not in executables:
         os.remove(tasks_wave)
 
-    # Create submission script with dependencies between stages
+    # Create submission script
     NCPU = int(run_settings['ncpu'])
     submit_sh = os.path.join(outdir, "submit.sh")
     with open(submit_sh, "w") as sf:
@@ -178,18 +209,50 @@ def main(args=None):
         sf.write("        exit 1\n")
         sf.write("    fi\n")
         sf.write("}\n\n")
-        sf.write(f"cd {outdir}\n")
+        sf.write(f"cd {outdir}\n\n")
+
         sb = "sbatch"
         if args.constraints:
             sb += f" -C {args.constraints}"
         if args.time:
             sb += f" -t {args.time}"
-        # Stage 1: run_sampler
-        sf.write(f'runid=$(get_id "$({sb} -p {args.partition} -n {args.ntasks} -c {NCPU} disBatch {tasks_run})")\n')
-        # Stage 2 (optional): make_waveforms
-        if "waveform_h5s" in executables:
-            sf.write(f'waveid=$(get_id "$({sb} --dependency=afterok:$runid -p {args.partition} -n 1 -c {NCPU} disBatch {tasks_wave})")\n')
-        sf.write("cd -\n")
+        if args.mem:
+            sb += f" --mem={args.mem}"
+
+        # Tail of each sbatch line: either disBatch driving the task file, or a
+        # plain `bash <taskfile>` wrapped in sbatch's --wrap. The explicit
+        # --export=ALL,LAL_DATA_PATH=... ensures LAL_DATA_PATH reaches the job
+        # on clusters whose SLURM_EXPORT_ENV default would otherwise strip it.
+        def launch(taskfile):
+            if args.disbatch:
+                return f"disBatch {taskfile}"
+            return f'--export=ALL,LAL_DATA_PATH=$LAL_DATA_PATH --wrap="bash {taskfile}"'
+
+        if args.split_jobs:
+            # Warn if --ntasks was passed, since it has no effect in split-jobs mode
+            if args.ntasks is not None:
+                logging.warning("--ntasks is ignored when --split-jobs is set; each job uses -n 1.")
+            # Stage 1: one independent sbatch job per run
+            # Collect job IDs so the waveform stage can depend on all of them
+            sf.write("run_ids=()\n")
+            for run_lbl in run_labels:
+                tasks_run = os.path.join(outdir, f"tasks_run_{run_lbl}.txt")
+                sf.write(f'run_ids+=($(get_id "$({sb} -p {args.partition} -n 1 -c {NCPU} --job-name {run_lbl} {launch(tasks_run)})"))\n')
+            # Stage 2 (optional): waveform job depends on all run jobs completing.
+            # Build the dependency string explicitly to avoid relying on IFS subshell scoping.
+            if "waveform_h5s" in executables:
+                sf.write('\n# Build afterok dependency string from all run job IDs\n')
+                sf.write('dep="afterok"\n')
+                sf.write('for id in "${run_ids[@]}"; do dep="$dep:$id"; done\n')
+                sf.write(f'waveid=$(get_id "$({sb} --dependency=$dep -p {args.partition} -n 1 -c {NCPU} --job-name waveforms {launch(tasks_wave)})")\n')
+        else:
+            ntasks = args.ntasks if args.ntasks is not None else 100
+            sf.write(f'runid=$(get_id "$({sb} -p {args.partition} -n {ntasks} -c {NCPU} {launch(tasks_run_combined)})")\n')
+            # Stage 2 (optional): waveform job depends on combined job
+            if "waveform_h5s" in executables:
+                sf.write(f'waveid=$(get_id "$({sb} --dependency=afterok:$runid -p {args.partition} -n 1 -c {NCPU} {launch(tasks_wave)})")\n')
+
+        sf.write("\ncd -\n")
 
     os.chmod(submit_sh, 0o755)
     if args.submit:
