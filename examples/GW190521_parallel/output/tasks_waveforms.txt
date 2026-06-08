@@ -1,0 +1,4 @@
+/home/kgk3/tdinf/tdinf/waveform_h5s.py --directory . --run_key pre_-0.05 --N_waveforms 1000  &>> pre_-0.05seconds/waveforms.log
+/home/kgk3/tdinf/tdinf/waveform_h5s.py --directory . --run_key full --N_waveforms 1000  &>> full_0.0seconds/waveforms.log
+/home/kgk3/tdinf/tdinf/waveform_h5s.py --directory . --run_key pre_0.0 --N_waveforms 1000  &>> pre_0.0seconds/waveforms.log
+/home/kgk3/tdinf/tdinf/waveform_h5s.py --directory . --run_key pre_0.05 --N_waveforms 1000  &>> pre_0.05seconds/waveforms.log
