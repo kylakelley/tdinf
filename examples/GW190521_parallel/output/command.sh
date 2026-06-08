@@ -1,0 +1,1 @@
+/home/kgk3/tdinf/.venv/bin/tdinf_slurm_pipe --modes full pre --times_list -0.05 0 0.05 --output_directory output --config_file GW190521.ini --overwrite --time 3-0 --ntasks 7 --split-jobs --partition hpc --mem 60G --no-disbatch
