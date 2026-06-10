@@ -126,6 +126,14 @@ def create_run_sampler_arg_parser():
                    help="Standard deviation of time prior [s.]"
                         "Default: 0.01 s")
 
+    # Extra waveform arguments for gwsignal approximants
+    p.add_argument('--waveform-kwargs', default=None,
+                   help='JSON string of extra waveform arguments passed to the '
+                        'gwsignal generator, written as compact JSON (no spaces) '
+                        'wrapped in single quotes, e.g. '
+                        '--waveform-kwargs \'{"lmax_nyquist":2}\'. '
+                        'Only supported for gwsignal approximants.')
+
     # Do we want to resume an old run?
     p.add_argument('--resume', action='store_true',
                    help = 'Include flag if you want the run to pick up from a previous un-finished run, '
@@ -138,6 +146,18 @@ def create_run_sampler_arg_parser():
                          'runs. Helpful for debugging.')
 
     return p
+
+
+def parse_waveform_kwargs(json_string):
+    """
+    Parse the --waveform-kwargs JSON string into a dict.
+    """
+    if not json_string:
+        return {}
+    s = json_string.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        s = s[1:-1]
+    return json.loads(s)
 
 
 def modify_parameters(data, args):
@@ -286,6 +306,7 @@ def initialize_kwargs(args, reference_parameters):
         'chi_lim': args.spin_magnitude_prior_bounds,
         'dist_lim': args.luminosity_distance_prior_bounds,
         'sigma_time': args.time_prior_sigma,
+        'waveform_kwargs': parse_waveform_kwargs(args.waveform_kwargs),
         'approx': args.approx,
         'f_ref': args.fref,
         'f_low': args.flow,

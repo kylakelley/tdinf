@@ -121,12 +121,12 @@ def get_pe_samples(path):
         with h5py.File(path, 'r') as f:
             try:
                 try:
-                    pe_samples = f['C00:IMRPhenomXPNR']['posterior_samples'][()]
+                    pe_samples = f['C00:SEOBNRv5PHM']['posterior_samples'][()]
                 except: 
                     try:
                         pe_samples = f['C00:IMRPhenomXPHM-SpinTaylor']['posterior_samples'][()]
                     except: 
-                        pe_samples = f['C00:SEOBNRv5PHM']['posterior_samples'][()]
+                        pe_samples = f['C00:IMRPhenomXPNR']['posterior_samples'][()]
             except:
                 # hdf5 --> dict
                 pe_samples_dict = hdf5_to_dict(f)['posterior']
