@@ -15,9 +15,11 @@ from .preprocessing import get_ACF
 from .whiten import whitenData
 import astropy.units as u
 
-def check_spin_settings_of_approx(approx_name):
+def check_settings_of_approx(approx_name):
     """
-    Check the spin configuration supported by a given waveform approximant.
+    Check the spin configuration supported by a given waveform approximant,
+    and determine whether it must be generated through the gwsignal
+    interface rather than lalsimulation's SimInspiralChooseTDWaveform.
 
     Parameters:
     - approx_name (str): Name of the waveform approximant.
@@ -25,15 +27,28 @@ def check_spin_settings_of_approx(approx_name):
     Returns:
     - aligned_spins (bool): True if the approximant supports only aligned spins.
     - no_spins (bool): True if the approximant supports no spins.
+    - use_gwsignal (bool): True if the approximant is not a LAL time domain
+      approximant and must be generated with gwsignal (e.g. SEOBNRv5EHM).
     """
-    
+
     aligned_spins = False
     no_spins = False
 
-    approx = lalsim.GetApproximantFromString(approx_name)
+    # NB: GetApproximantFromString does not necessarily raise for unknown
+    # approximants (it can return a bogus enum), so key off the
+    # ImplementedTDApproximants check
+    try:
+        approx = lalsim.GetApproximantFromString(approx_name)
+        is_lal_td = bool(lalsim.SimInspiralImplementedTDApproximants(approx))
+    except Exception:
+        is_lal_td = False
 
-    if not lalsim.SimInspiralImplementedTDApproximants(approx):
-        raise ValueError(f"ERROR: {approx_name} is not available as a time domain waveform")
+    if not is_lal_td:
+        # fall back to gwsignal; raises ValueError if the approximant is unknown
+        from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
+        generator = gwsignal_get_waveform_generator(approx_name)
+        aligned_spins = generator.metadata['type'] == 'aligned_spin'
+        return aligned_spins, no_spins, True
 
     spin_enum = lalsim.SimInspiralGetSpinSupportFromApproximant(approx)
 
@@ -46,7 +61,7 @@ def check_spin_settings_of_approx(approx_name):
     else:
         print("WARNING, UNSURE IF WAVEFORM HAS SPINS")
         
-    return aligned_spins, no_spins
+    return aligned_spins, no_spins, False
 
 
 class LogisticParameterManager:
@@ -73,8 +88,12 @@ class LogisticParameterManager:
         # reference time
         self.reference_time = kwargs['geocenter_time']
 
-        # get allowed spin settings of waveform model
-        self.aligned_spins, self.no_spins = check_spin_settings_of_approx(kwargs['approx'])
+        # get allowed spin settings of waveform model, and whether it must be
+        # generated through gwsignal rather than the lal interface
+        self.approx_name = kwargs['approx']
+        self.aligned_spins, self.no_spins, self.use_gwsignal = check_settings_of_approx(
+            self.approx_name
+        )
 
         # get up the logistic parameters which are always sampled over
         self.logistic_parameters = [
@@ -474,9 +493,36 @@ class AntennaAndTimeManager(LogisticParameterManager):
 class WaveformManager(LogisticParameterManager):
     def __init__(self, ifos, *args, **kwargs):
         super(WaveformManager, self).__init__(*args, **kwargs)
-        self.approx_name = kwargs['approx']
-        self.approximant = lalsim.SimInspiralGetApproximantFromString(self.approx_name)
+        if self.use_gwsignal:
+            self.approximant = None
+            if kwargs.get('f22_start', 20) <= 0:
+                raise ValueError(
+                    f"gwsignal approximant {self.approx_name} requires a "
+                    "positive waveform start frequency")
+        else:
+            self.approximant = lalsim.SimInspiralGetApproximantFromString(self.approx_name)
+        self.waveform_kwargs = kwargs.get('waveform_kwargs') or {}
+        if self.waveform_kwargs and not self.use_gwsignal:
+            raise ValueError(
+                "--waveform-kwargs is only supported for gwsignal approximants; "
+                f"{self.approx_name} uses the lal interface")
+        # the gwsignal generator is created lazily (see gwsignal_generator
+        # property): it is not guaranteed to be picklable, and this object
+        # gets pickled, e.g. by pool.starmap in waveform_h5s
+        self._gwsignal_generator = None
         self.antenna_and_time_manager = AntennaAndTimeManager(ifos, *args, **kwargs)
+
+    @property
+    def gwsignal_generator(self):
+        if self._gwsignal_generator is None:
+            from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
+            self._gwsignal_generator = gwsignal_get_waveform_generator(self.approx_name)
+        return self._gwsignal_generator
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['_gwsignal_generator'] = None
+        return state
 
     def generate_lal_hphc(self, m1_msun, m2_msun, chi1, chi2, delta_t, dist_mpc=1,
                           f22_start=20, f_ref=11, inclination=0, phi_ref=0.,NR_kws=None):
@@ -548,10 +594,51 @@ class WaveformManager(LogisticParameterManager):
             
         return hp, hc
 
+    def generate_gwsignal_hphc(self, x_phys, delta_t, f22_start=20, f_ref=20):
+        """
+        Generate the plus and cross polarizations for given waveform parameters
+        using the gwsignal interface (GenerateTDWaveform). Extra waveform arguments 
+        in self.waveform_kwargs are passed through to the generator.
+        """
+        from lalsimulation.gwsignal import GenerateTDWaveform
+
+        params = self.physical_dict_to_waveform_dict(x_phys)
+        params.update({
+            'deltaT': delta_t * u.s,
+            'f22_start': f22_start * u.Hz,
+            'f22_ref': f_ref * u.Hz,
+            'eccentricity': 0. * u.dimensionless_unscaled,
+            'longAscNodes': 0. * u.rad,
+            'meanPerAno': 0. * u.rad,
+            'condition': 0,
+        })
+        params.update(self.waveform_kwargs)
+
+        try:
+            pols = GenerateTDWaveform(params, self.gwsignal_generator)
+            hp, hc = pols.hp, pols.hc
+
+        # catch waveform generation failures so they map to zero likelihood
+        except Exception as e:
+            print("Caught gwsignal waveform error")
+            print("params =", params)
+            print("Exception:", type(e).__name__, e)
+            hp, hc = np.nan, np.nan
+            
+        return hp, hc
+
     def get_hplus_hcross(self, x_phys, delta_t, f22_start=11, f_ref=11, NR_kws=None):
         """
         Get plus and cross polarizations of waveform at geocenter
         """
+
+        if self.use_gwsignal:
+            # gwsignal already returns gwpy TimeSeries
+            hp, hc = self.generate_gwsignal_hphc(x_phys, delta_t,
+                                                 f22_start=f22_start, f_ref=f_ref)
+            if isinstance(hp, float) and hp!=hp:
+                return np.nan, np.nan
+            return hp, hc
 
         # get parameters needed for LAL waveform generation
         m1, m2 = m1m2_from_mtotq(x_phys['total_mass'], x_phys['mass_ratio'])

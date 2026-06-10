@@ -3,6 +3,7 @@ from . import utils
 import os
 import pandas as pd
 import re
+import shlex
 from matplotlib.lines import Line2D
 import imageio
 import corner
@@ -266,7 +267,8 @@ def get_settings_from_command_line_string(
         command_line_string = command_line_string.split('  &>>')[0]
     
     # skip the initial program name and parse remaining arguments
-    skip_initial_arg = command_line_string.split()[1:]
+    # (shlex keeps quoted arguments, e.g. --waveform-kwargs JSON, intact)
+    skip_initial_arg = shlex.split(command_line_string)[1:]
     args = parser.parse_args(skip_initial_arg)
     
     # return settings based on parsed arguments
