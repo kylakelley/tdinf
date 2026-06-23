@@ -499,13 +499,15 @@ class WaveformManager(LogisticParameterManager):
                 raise ValueError(
                     f"gwsignal approximant {self.approx_name} requires a "
                     "positive waveform start frequency")
+                
         else:
             self.approximant = lalsim.SimInspiralGetApproximantFromString(self.approx_name)
         self.waveform_kwargs = kwargs.get('waveform_kwargs') or {}
         if self.waveform_kwargs and not self.use_gwsignal:
-            raise ValueError(
-                "--waveform-kwargs is only supported for gwsignal approximants; "
-                f"{self.approx_name} uses the lal interface")
+            import warnings
+            warnings.warn(f"--waveform-kwargs is only supported for gwsignal approximants;"
+                    f"ignoring for {self.approx_name} which uses the lal interface")
+            self_waveform_kwargs = {}
         # the gwsignal generator is created lazily (see gwsignal_generator
         # property): it is not guaranteed to be picklable, and this object
         # gets pickled, e.g. by pool.starmap in waveform_h5s
@@ -730,6 +732,9 @@ class LnLikelihoodManager(LogisticParameterManager):
         self.rho_dict, self.conditioned_psd_dict = self._make_autocorrolation_dict()
         self.ifos = list(self.data_dict.keys())
         for ifo, rho in self.rho_dict.items():
+            if len(self.data_dict[ifo]) == len(rho) + 1:
+                self.data_dict[ifo] = self.data_dict[ifo][:-1]
+                self.time_dict[ifo] = self.time_dict[ifo][:-1]
             assert len(rho) == len(self.data_dict[ifo]), 'Length for ACF is not the same as for the data'
         self.only_prior = only_prior
         self.whitened_data_dict = self._make_whitened_data_dict()
