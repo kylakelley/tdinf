@@ -730,6 +730,9 @@ class LnLikelihoodManager(LogisticParameterManager):
         self.rho_dict, self.conditioned_psd_dict = self._make_autocorrolation_dict()
         self.ifos = list(self.data_dict.keys())
         for ifo, rho in self.rho_dict.items():
+            if len(self.data_dict[ifo]) == len(rho) + 1:
+                self.data_dict[ifo] = self.data_dict[ifo][:-1]
+                self.time_dict[ifo] = self.time_dict[ifo][:-1]
             assert len(rho) == len(self.data_dict[ifo]), 'Length for ACF is not the same as for the data'
         self.only_prior = only_prior
         self.whitened_data_dict = self._make_whitened_data_dict()
