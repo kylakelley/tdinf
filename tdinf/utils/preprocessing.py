@@ -235,7 +235,7 @@ def get_Tcut_from_Ncycles(waveform_dict, time_dict, ifo, Ncycles, ra, dec):
     return tcut_geo
 
 
-def get_ACF(psd_dict, time_dict, f_low=11, f_max=None, nan_inf_replacement=1e10, patch=None, return_psds=False): 
+def get_ACF(psd_dict, time_dict, f_low=20, f_max=None, nan_inf_replacement=1e10, patch=None, return_psds=False): 
     """
     Compute the autocorrelation function (ACF) from a PSD
 
