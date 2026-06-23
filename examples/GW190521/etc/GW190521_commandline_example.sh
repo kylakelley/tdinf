@@ -14,7 +14,7 @@ runSamp=$(which run_sampler)
 
 $runSamp \
     --output-h5 output/full_0.0seconds.h5 \
-    --mode full \
+    --mode pre \
     --Tcut-seconds 0.0 \
     --ifos H1 L1 V1 \
     --data H1:${inputFolder}/H-H1_GWOSC_16KHZ_R2-1242442952-32.hdf5 \
@@ -33,7 +33,7 @@ $runSamp \
     --approx NRSur7dq4 \
     --ncpu 1 \
     --nwalkers 512 \
-    --nsteps 50000 \
+    --nsteps 5 \
     --Tstart 1242442966.907715 \
     --Tend 1242442967.607715 \
     --sampling-rate 2048 \
