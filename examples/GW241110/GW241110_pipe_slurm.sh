@@ -3,18 +3,18 @@
 # Example for running TDinf code using the slurm pipeline. 
 
 tdinf_slurm_pipe \
-    --modes full \
-    --times_list -0.05 0 0.05 \
-    --output_directory output \
-    --config_file GW241110.ini \
+    --modes full pre post \
+    --times_list -6 0 1 \
+    --output_directory output_T4 \
+    --config_file GW241110_SpinTaylorT4.ini \
     --overwrite \
     --time 3-0 \
     --ntasks 7 \
     --split-jobs \
     --partition hpc \
     --no-disbatch \
-    --mem 60G \
-    --submit
+    --mem 60G 
+     
 
 # -------------------------------
 # Explanation of arguments 

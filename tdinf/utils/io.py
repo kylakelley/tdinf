@@ -121,10 +121,11 @@ def get_pe_samples(path):
         with h5py.File(path, 'r') as f:
             try:
                 try:
-                    pe_samples = f['C00:SEOBNRv5PHM']['posterior_samples'][()]
+                    # for testing GW190521
+                    pe_samples = f['C00:IMPRhenomXPHM-SpinTaylor']['posterior_samples'][()]
                 except: 
                     try:
-                        pe_samples = f['C00:IMRPhenomXPHM-SpinTaylor']['posterior_samples'][()]
+                        pe_samples = f['C00:SEOBNRv5PHM']['posterior_samples'][()]
                     except: 
                         pe_samples = f['C00:IMRPhenomXPNR']['posterior_samples'][()]
             except:
