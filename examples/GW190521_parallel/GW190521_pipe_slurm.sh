@@ -3,9 +3,9 @@
 # Example for running TDinf code using the slurm pipeline. 
 
 tdinf_slurm_pipe \
-    --modes full pre \
+    --modes full \
     --times_list -0.05 0 0.05\
-    --output_directory output \
+    --output_directory output_test \
     --config_file GW190521.ini \
     --overwrite \
     --time 3-0 \

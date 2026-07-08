@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --job-name=GW190521_full
+#SBATCH --partition=hpc
+#SBATCH --time=3-00:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=128
+#SBATCH --mem=16G
+#SBATCH --mail-user=kgk3@williams.edu
+#SBATCH --mail-type=ALL
+#SBATCH --output=GW190521_full_%j.log
+
+source /home/kgk3/tdinf/.venv/bin/activate
+cd /home/kgk3/tdinf/examples/GW190521
+
+tdinf_slurm_pipe \
+  --mode full \
+  --time 0.0 \
+  --config_file GW190521.ini \
+  --output_directory output_test
+

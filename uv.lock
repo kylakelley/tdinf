@@ -473,6 +473,15 @@ wheels = [
 ]
 
 [[package]]
+name = "disbatch"
+version = "3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/46/3c/5a8fc24987390cafc760210a71fb8c0dddf66fc07169434ec2425cfd6293/disbatch-3.0.tar.gz", hash = "sha256:c7396319bfadfcc11dca578386725373e16acb653c76042d1ceb304255efa5ef", size = 86559, upload-time = "2024-12-05T16:34:49.082Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/92/f047c1c15715d71e3588cbb11cc4d49680b8697b6121d653607cd06d5430/disbatch-3.0-py3-none-any.whl", hash = "sha256:6a6758426ad9523c690b0b051019f218c9287274c91739ca8affc77e4119878b", size = 65374, upload-time = "2024-12-05T16:34:47.29Z" },
+]
+
+[[package]]
 name = "distlib"
 version = "0.3.9"
 source = { registry = "https://pypi.org/simple" }
@@ -2226,6 +2235,7 @@ name = "tdinf"
 source = { editable = "." }
 dependencies = [
     { name = "corner" },
+    { name = "disbatch" },
     { name = "emcee" },
     { name = "gwpy" },
     { name = "h5ify" },
@@ -2249,6 +2259,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "corner", specifier = ">=2.2.3" },
+    { name = "disbatch", specifier = ">=3.0" },
     { name = "emcee" },
     { name = "gwpy", specifier = ">=3.0.12" },
     { name = "h5ify" },

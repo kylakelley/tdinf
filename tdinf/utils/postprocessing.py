@@ -102,11 +102,13 @@ def postprocessing_get_complete_samples_dict(samples, samples_lnp, likelihood_ma
     samples_dict['ln_likelihood'] = samples_lnp - samples_lnprior
     
     # Finally, generate SNRs and add them to the samples 
+    """
     print('Calculating SNRs from posterior ...')
     SNRs_dict = likelihood_manager.get_SNRs(samples)
     for k in SNRs_dict: 
         samples_dict[k] = SNRs_dict[k]
-        
+    """
+
     print(samples_dict.keys())
 
     # Get rid of the fixed parameters if we want

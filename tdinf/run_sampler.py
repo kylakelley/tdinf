@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os
-os.environ["OMP_NUM_THREADS"] = "1"
 import argparse
 import numpy as np
 import emcee
 import json
 import pandas as pd
 from multiprocessing import Pool, cpu_count
-import multiprocessing
 from contextlib import closing
+import os
 import tdinf.utils as utils
 
 def create_run_sampler_arg_parser():
@@ -607,8 +605,8 @@ def main():
         p0 = get_initial_walkers(likelihood_manager, args, nwalkers, ndim, reference_parameters, ref_pe_samples)
 
     # Deactivate numpy default number of cores to avoid using too many
-    # if args.ncpu > 1:
-        # os.environ["OMP_NUM_THREADS"] = "1"
+    if args.ncpu > 1:
+        os.environ["OMP_NUM_THREADS"] = "1"
 
     # for multiprocessing
     def sort_on_runtime(pos):
@@ -619,68 +617,50 @@ def main():
     """
     Run sampler
     """
-    print("hello")
+
     print("Available cores: %i" % cpu_count())
     print("Running with %i cores" % args.ncpu)
     
+    with closing(Pool(processes=args.ncpu)) as pool:
 
-    # with closing(Pool(processes=args.ncpu)) as pool:
-    # with multiprocessing.get_context("spawn").Pool() as pool:
+        # Set up sampler
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, likelihood_manager.get_log_posterior,
+                                        backend=backend, pool=pool,
+                                        runtime_sortingfn=sort_on_runtime,
+                                        kwargs=kwargs)
 
+        # If there are still iterations left to run ... 
+        if nsteps > 0:
+            
+            # We'll track how the average autocorrelation time estimate changes
+            index = 0
+            autocorr = np.empty(nsteps)
 
-    pool = Pool(processes=args.ncpu)
+            # This will be useful for testing convergence
+            old_tau = np.inf
 
+            # Cycle through remaining iterations
+            for sample in sampler.sample(p0, iterations=nsteps, progress=True):
 
-    # Set up sampler
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, likelihood_manager.get_log_posterior,
-                                    backend=backend, pool=pool,
-                                    runtime_sortingfn=sort_on_runtime,
-                                    kwargs=kwargs)
+                # Only check convergence every 500 steps
+                if sampler.iteration % 500:
+                    continue
 
-    # If there are still iterations left to run ... 
-    if nsteps > 0:
-        
-        # We'll track how the average autocorrelation time estimate changes
-        index = 0
-        autocorr = np.empty(nsteps)
+                # Compute the autocorrelation time so far
+                # Using tol=0 means that we'll always get an estimate even
+                # if it isn't trustworthy
+                tau = sampler.get_autocorr_time(tol=0)
+                autocorr[index] = np.mean(tau)
+                index += 1
 
-        # This will be useful for testing convergence
-        old_tau = np.inf
-        print("tau")
+                # Check convergence
+                converged = np.all(tau * 100 < sampler.iteration)
+                converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+                if converged:
+                    break  # if convergence reached before nsteps, stop running
+                old_tau = tau
 
-        # Cycle through remaining iterations
-        for sample in sampler.sample(p0, iterations=nsteps, progress=True):
-            continue
-
-            # Only check convergence every 500 steps
-            """
-            if sampler.iteration % 500:
-                continue
-
-            print('starting autocorrelation')
-            # Compute the autocorrelation time so far
-            # Using tol=0 means that we'll always get an estimate even
-            # if it isn't trustworthy
-            tau = sampler.get_autocorr_time(tol=0)
-            autocorr[index] = np.mean(tau)
-            print('done with autocorrelation')
-            index += 1
-
-            # Check convergence
-            print('starting convergence')
-            converged = np.all(tau * 100 < sampler.iteration)
-            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
-            print('starting if converged')
-            if converged:
-                break  # if convergence reached before nsteps, stop running
-            print('before tau')
-            old_tau = tau
-            """
-
-    print('before pool', flush=True)
-    pool.terminate()
-    print('after pool')
-    print('after pool indented', flush=True)
+        pool.terminate()
 
     """
     Post processing and saving data

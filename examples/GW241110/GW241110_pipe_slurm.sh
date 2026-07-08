@@ -3,17 +3,17 @@
 # Example for running TDinf code using the slurm pipeline. 
 
 tdinf_slurm_pipe \
-    --modes full pre post \
-    --times_list -6 0 1 \
-    --output_directory output_T4 \
-    --config_file GW241110_SpinTaylorT4.ini \
+    --modes full pre \
+    --times_list -0.1 -0.05 -0.025 0 \
+    --output_directory output_GW241110_260708_IMR_20k_-0p1_-0p05_-0p025_0 \
+    --config_file GW241110_IMRPhenomXPNR.ini \
     --overwrite \
     --time 3-0 \
     --ntasks 7 \
     --split-jobs \
     --partition hpc \
     --no-disbatch \
-    --mem 60G 
+    --mem 65G
      
 
 # -------------------------------

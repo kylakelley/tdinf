@@ -122,7 +122,7 @@ def get_pe_samples(path):
             try:
                 try:
                     # for testing GW190521
-                    pe_samples = f['C00:IMPRhenomXPHM-SpinTaylor']['posterior_samples'][()]
+                    pe_samples = f['IMRPhenomXPHM-SpinTaylor']['posterior_samples'][()]
                 except: 
                     try:
                         pe_samples = f['C00:SEOBNRv5PHM']['posterior_samples'][()]
