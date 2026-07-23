@@ -3,10 +3,10 @@
 # Example for running TDinf code using the slurm pipeline. 
 
 tdinf_slurm_pipe \
-    --modes full pre \
-    --times_list -0.1 -0.05 -0.025 0 \
-    --output_directory output_GW241110_260708_IMR_20k_-0p1_-0p05_-0p025_0 \
-    --config_file GW241110_IMRPhenomXPNR.ini \
+    --modes full pre post \
+    --times_list -1.5 -1.0 -0.65 -0.25 -0.1 -0.05 -0.025 -0.007 0 \
+    --output_directory output_GW241110_260719_SEO_50k_-1.5_-1.0_-0.65_-0.25_-0.1_-0.05_-0.025_-0.007_0 \
+    --config_file GW241110_SEOBNRv5PHM.ini \
     --overwrite \
     --time 3-0 \
     --ntasks 7 \
